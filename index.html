@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aether Intelligence OS | Village Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root { --accent: #00d2ff; --card-bg: rgba(255, 255, 255, 0.9); }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
+        
+        body { 
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+            min-height: 100vh; color: #1d1d1f; padding: 15px; transition: background 1s ease;
+        }
+
+        .search-glass {
+            max-width: 600px; margin: 10px auto 25px; background: var(--card-bg);
+            backdrop-filter: blur(15px); border-radius: 50px; padding: 8px 20px;
+            display: flex; align-items: center; border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+        input { flex: 1; border: none; outline: none; background: transparent; font-size: 16px; padding: 8px; font-weight: 500; }
+        .btn-sync { background: #1d1d1f; color: white; border: none; padding: 10px 22px; border-radius: 25px; font-weight: 800; font-size: 11px; cursor: pointer; }
+
+        .intel-hub { max-width: 600px; margin: auto; display: none; animation: fadeIn 0.8s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } }
+
+        .advice-bar {
+            background: #1d1d1f; color: #fff; border-radius: 20px;
+            padding: 15px 20px; margin-bottom: 15px; font-size: 14px;
+            display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .hero { 
+            background: var(--card-bg); backdrop-filter: blur(20px); 
+            border-radius: 35px; padding: 30px; margin-bottom: 15px; 
+            position: relative; border: 1px solid rgba(255,255,255,0.4);
+        }
+        .temp-val { font-size: 5.5rem; font-weight: 800; letter-spacing: -5px; line-height: 1; margin: 15px 0; }
+        .city-label { font-size: 26px; font-weight: 600; color: #1e3c72; }
+
+        .forecast-scroll { display: flex; gap: 12px; overflow-x: auto; padding: 10px 0 20px; scrollbar-width: none; }
+        .forecast-scroll::-webkit-scrollbar { display: none; }
+        .f-card { min-width: 85px; background: var(--card-bg); border-radius: 20px; padding: 15px; text-align: center; border: 1px solid rgba(255,255,255,0.5); }
+
+        #map { width: 100%; height: 250px; border-radius: 30px; margin: 15px 0; border: 5px solid white; box-shadow: 0 10px 30px rgba(0,0,0,0.1); z-index: 1; }
+
+        .bento-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .bento-box { background: var(--card-bg); padding: 20px; border-radius: 25px; border: 1px solid rgba(255,255,255,0.4); }
+        .bento-box label { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #777; }
+        .bento-box p { font-size: 1.5rem; font-weight: 600; margin-top: 5px; }
+
+        #loader { text-align: center; color: white; padding: 20px; font-weight: 600; display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="search-glass">
+        <input type="text" id="targetLoc" placeholder="Todachina Lower Dir..." onkeypress="if(event.key==='Enter') syncIntel()">
+        <button class="btn-sync" onclick="syncIntel()">SYNC</button>
+    </div>
+
+    <div id="loader">🛰️ UPLINKING TO SATELLITE...</div>
+
+    <div class="intel-hub" id="appUI">
+        <div class="advice-bar">
+            <span>💡</span> <span id="adviceText">Scanning environment...</span>
+        </div>
+
+        <div class="hero">
+            <div id="txtState" style="font-size: 11px; font-weight: 800; opacity: 0.5; letter-spacing: 2px;">NODE ACTIVE</div>
+            <div class="city-label" id="txtCity">Location</div>
+            <div class="temp-val" id="txtTemp">--°</div>
+            <div id="txtDesc" style="text-transform: capitalize; font-weight: 600; opacity: 0.7;">Sky</div>
+            <img id="wIcon" src="" style="position: absolute; right: 10px; top: 20px; width: 130px;">
+        </div>
+
+        <div class="forecast-scroll" id="hourly"></div>
+
+        <div id="map"></div>
+
+        <div class="bento-grid">
+            <div class="bento-box"><label>Humidity</label><p id="vHum">--%</p></div>
+            <div class="bento-box"><label>Wind Speed</label><p id="vWind">-- km</p></div>
+            <div class="bento-box"><label>Feels Like</label><p id="vFeel">--°</p></div>
+            <div class="bento-box"><label>Pressure</label><p id="vPres">-- hPa</p></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Yahan apni API Key dalein
+        const API_KEY = "12e66aee9a7b5c3141fc50e34412d03b"; 
+        let map, marker;
+
+        async function syncIntel() {
+            const query = document.getElementById('targetLoc').value;
+            if(!query) return;
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('appUI').style.display = 'none';
+
+            try {
+                const geo = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${query}&limit=1&appid=${API_KEY}`);
+                const gData = await geo.json();
+
+                if(gData.length > 0) {
+                    const {lat, lon, name} = gData[0];
+                    const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`);
+                    const wData = await res.json();
+                    
+                    const fRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=$                    const fRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${API_K}`);
+                    const fData = await fRes.json();
+
+                    updateUI(wData, fData, name);
+                    updateMap(lat, lon);
+                } else { alert("Location not found."); }
+            } catch (e) { alert("Sync Error."); }
+            finally { document.getElementById('loader').style.display = 'none'; }
+        }
+
+        function updateUI(d, f, name) {
+            document.getElementById('appUI').style.display = 'block';
+            document.getElementById('txtCity').innerText = name;
+            document.getElementById('txtTemp').innerText = Math.round(d.main.temp) + "°";
+            document.getElementById('txtDesc').innerText = d.weather[0].description;
+            document.getElementById('vHum').innerText = d.main.humidity + "%";
+            document.getElementById('vWind').innerText = d.wind.speed + " km/h";
+            document.getElementById('vFeel').innerText = Math.round(d.main.feels_like) + "°";
+            document.getElementById('vPres').innerText = d.main.pressure;
+            document.getElementById('wIcon').src = `https://openweathermap.org/img/wn/${d.weather[0].icon}@4x.png`;
+
+            // Hourly Forecast
+            const hourly = document.getElementById('hourly');
+            hourly.innerHTML = "";
+            f.list.slice(0, 8).forEach(h => {
+                hourly.innerHTML += `<div class="f-card">
+                    <small>${new Date(h.dt * 1000).getHours()}:00</small><br>
+                    <img src="https://openweathermap.org/img/wn/${h.weather[0].icon}.png"><br>
+                    <b>${Math.round(h.main.temp)}°</b>
+                </div>`;
+            });
+
+            // AI Advice
+            let advice = "Weather is perfect for outdoor work.";
+            if(d.main.temp > 32) advice = "It's very hot in Lower Dir. Keep water with you!";
+            if(d.weather[0].main === 'Rain') advice = "Rainy day! Drive carefully on mountain roads.";
+            document.getElementById('adviceText').innerText = advice;
+
+            // Theme Change
+            document.body.style.background = d.main.temp > 25 ? "linear-gradient(135deg, #f83600, #f9d423)" : "linear-gradient(135deg, #1e3c72, #2a5298)";
+        }
+
+        function updateMap(lat, lon) {
+            if (map) { map.setView([lat, lon], 14); marker.setLatLng([lat, lon]); }
+            else {
+                map = L.map('map', { zoomControl: false }).setView([lat, lon], 14);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                marker = L.marker([lat, lon]).addTo(map);
+            }
+            setTimeout(() => map.invalidateSize(), 400);
+        }
+
+        window.onload = () => {
+            document.getElementById('targetLoc').value = "Todachina Lower Dir";
+            syncIntel();
+        };
+    </script>
+</body>
+</html>
