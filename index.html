@@ -102,15 +102,15 @@
             document.getElementById('appUI').style.display = 'none';
 
             try {
-                const geo = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${query}&limit=1&appid=${API_KEY}`);
+                const geo = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${query}&limit=1&appid=${12e66aee9a7b5c3141fc50e34412d03b}`);
                 const gData = await geo.json();
 
                 if(gData.length > 0) {
                     const {lat, lon, name} = gData[0];
-                    const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`);
+                    const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${12e66aee9a7b5c3141fc50e34412d03b}`);
                     const wData = await res.json();
                     
-                    const fRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=$                    const fRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${API_K}`);
+                    const fRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=$                    const fRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${12e66aee9a7b5c3141fc50e34412d03b}`);
                     const fData = await fRes.json();
 
                     updateUI(wData, fData, name);
